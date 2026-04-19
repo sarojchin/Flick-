@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "Flick!",
+    "slug": "flick",
+    "scheme": "flick",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#0a0a12",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.flick.couples"
+    },
+    "android": {
+      "package": "app.flick.couples",
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0a12"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
