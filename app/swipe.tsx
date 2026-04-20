@@ -41,6 +41,9 @@ export default function SwipeScreen() {
     addMaybe,
     matchMovie,
     setMatchMovie,
+    deckLoading,
+    deckError,
+    reloadDeck,
   } = useRoom();
 
   const current = deck[deckIdx];
@@ -141,6 +144,12 @@ export default function SwipeScreen() {
   });
 
   if (!current) {
+    if (deckLoading) {
+      return <DeckLoading />;
+    }
+    if (deckError) {
+      return <DeckError message={deckError} onRetry={reloadDeck} onExit={() => router.replace('/landing')} />;
+    }
     return <EmptyStack onExit={() => router.replace('/matches')} />;
   }
 
@@ -336,6 +345,107 @@ export default function SwipeScreen() {
           }}
         />
       )}
+    </SafeAreaView>
+  );
+}
+
+function DeckLoading() {
+  const t = useTheme();
+  return (
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: t.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'InstrumentSerif_400Regular',
+          fontSize: 36,
+          color: t.text,
+          letterSpacing: -0.8,
+          textAlign: 'center',
+        }}
+      >
+        Loading{' '}
+        <Text style={{ fontFamily: 'InstrumentSerif_400Regular_Italic', color: t.primary }}>
+          tonight's
+        </Text>{' '}
+        films…
+      </Text>
+      <Text
+        style={{
+          fontFamily: 'JetBrainsMono_400Regular',
+          fontSize: 10,
+          color: t.textMute,
+          letterSpacing: 1.5,
+          marginTop: 18,
+        }}
+      >
+        TMDB · curating your deck
+      </Text>
+    </SafeAreaView>
+  );
+}
+
+function DeckError({
+  message,
+  onRetry,
+  onExit,
+}: {
+  message: string;
+  onRetry: () => void;
+  onExit: () => void;
+}) {
+  const t = useTheme();
+  return (
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: t.bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 40,
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: 'InstrumentSerif_400Regular',
+          fontSize: 40,
+          color: t.text,
+          letterSpacing: -0.8,
+          textAlign: 'center',
+        }}
+      >
+        Couldn't reach{' '}
+        <Text style={{ fontFamily: 'InstrumentSerif_400Regular_Italic', color: t.no }}>
+          TMDB
+        </Text>
+        .
+      </Text>
+      <Text
+        style={{
+          color: t.textDim,
+          fontFamily: 'Geist_400Regular',
+          fontSize: 13,
+          marginTop: 14,
+          textAlign: 'center',
+          maxWidth: 320,
+        }}
+      >
+        {message}
+      </Text>
+      <View style={{ marginTop: 28, flexDirection: 'row', gap: 10 }}>
+        <FlickButton variant="surface" onPress={onExit} size="md">
+          Back
+        </FlickButton>
+        <FlickButton onPress={onRetry} size="md">
+          Try again
+        </FlickButton>
+      </View>
     </SafeAreaView>
   );
 }

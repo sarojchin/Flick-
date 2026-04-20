@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Linking, Pressable, Text, View } from 'react-native';
 import Animated, { FadeIn, FadeInUp, ZoomIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '@/lib/ThemeContext';
@@ -19,6 +19,12 @@ export function MatchOverlay({ movie, onClose, onOpenMatches }: Props) {
   const services = FLICK_SERVICES.filter((s) => movie.services.includes(s.id));
   const endHour = Math.floor(21 + movie.runtime / 60);
   const endMin = String(movie.runtime % 60).padStart(2, '0');
+  const providers = movie.providers ?? [];
+
+  const openProvider = (deepLink: string | undefined, name: string) => {
+    const url = deepLink ?? `https://www.google.com/search?q=${encodeURIComponent(`watch ${movie.title} on ${name}`)}`;
+    Linking.openURL(url).catch(() => {});
+  };
 
   return (
     <Animated.View
@@ -122,83 +128,183 @@ export function MatchOverlay({ movie, onClose, onOpenMatches }: Props) {
         >
           {movie.title}
         </Text>
-        <Text
-          style={{
-            fontFamily: 'Geist_400Regular',
-            fontSize: 13,
-            color: t.textDim,
-            marginTop: 10,
-          }}
-        >
-          🕗 {movie.runtime}m · ends by {endHour}:{endMin}
-        </Text>
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 6,
-            marginTop: 12,
-            flexWrap: 'wrap',
-          }}
-        >
+        {movie.runtime > 0 && (
           <Text
             style={{
-              fontFamily: 'JetBrainsMono_400Regular',
-              fontSize: 10,
-              color: t.textMute,
-              letterSpacing: 1,
+              fontFamily: 'Geist_400Regular',
+              fontSize: 13,
+              color: t.textDim,
+              marginTop: 10,
             }}
           >
-            WATCH ON
+            🕗 {movie.runtime}m · ends by {endHour}:{endMin}
           </Text>
-          {services.map((s) => (
-            <View
-              key={s.id}
+        )}
+
+        {providers.length === 0 ? (
+          <Text
+            style={{
+              fontFamily: 'Geist_400Regular',
+              fontSize: 12,
+              color: t.textMute,
+              marginTop: 14,
+            }}
+          >
+            Not currently streaming on the services we track.
+          </Text>
+        ) : (
+          <View style={{ marginTop: 14 }}>
+            <Text
               style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 6,
-                paddingVertical: 4,
-                paddingLeft: 4,
-                paddingRight: 10,
-                borderRadius: 999,
-                backgroundColor: t.surface2,
-                borderWidth: 1,
-                borderColor: t.border,
+                fontFamily: 'JetBrainsMono_400Regular',
+                fontSize: 10,
+                color: t.textMute,
+                letterSpacing: 1,
+                marginBottom: 8,
               }}
             >
+              OPEN ON
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {providers.map((p) => {
+                // Match against our internal service to inherit tint + mono.
+                const internal = FLICK_SERVICES.find(
+                  (s) => s.name.toLowerCase() === p.name.toLowerCase()
+                );
+                return (
+                  <Pressable
+                    key={p.name}
+                    onPress={() => openProvider(p.deepLink, p.name)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 8,
+                      paddingVertical: 6,
+                      paddingLeft: 6,
+                      paddingRight: 12,
+                      borderRadius: 999,
+                      backgroundColor: t.surface2,
+                      borderWidth: 1,
+                      borderColor: t.border,
+                      opacity: pressed ? 0.85 : 1,
+                    })}
+                  >
+                    <View
+                      style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 5,
+                        backgroundColor: internal?.tint ?? t.primary,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: 'InstrumentSerif_400Regular',
+                          fontSize: 13,
+                          color: 'white',
+                        }}
+                      >
+                        {internal?.mono ?? p.name[0]}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{
+                        fontFamily: 'Geist_500Medium',
+                        fontSize: 13,
+                        color: t.text,
+                      }}
+                    >
+                      {p.name}
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: 'JetBrainsMono_400Regular',
+                        fontSize: 11,
+                        color: t.textMute,
+                      }}
+                    >
+                      ↗
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        )}
+
+        {/* If we don't have providers yet (still enriching) but know which
+            services list this title, show their tags as a teaser. */}
+        {providers.length === 0 && services.length > 0 && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: 12,
+              flexWrap: 'wrap',
+            }}
+          >
+            <Text
+              style={{
+                fontFamily: 'JetBrainsMono_400Regular',
+                fontSize: 10,
+                color: t.textMute,
+                letterSpacing: 1,
+              }}
+            >
+              ON
+            </Text>
+            {services.map((s) => (
               <View
+                key={s.id}
                 style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  backgroundColor: s.tint,
+                  flexDirection: 'row',
                   alignItems: 'center',
-                  justifyContent: 'center',
+                  gap: 6,
+                  paddingVertical: 4,
+                  paddingLeft: 4,
+                  paddingRight: 10,
+                  borderRadius: 999,
+                  backgroundColor: t.surface2,
+                  borderWidth: 1,
+                  borderColor: t.border,
                 }}
               >
-                <Text
+                <View
                   style={{
-                    fontFamily: 'InstrumentSerif_400Regular',
-                    fontSize: 12,
-                    color: 'white',
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    backgroundColor: s.tint,
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
                 >
-                  {s.mono}
+                  <Text
+                    style={{
+                      fontFamily: 'InstrumentSerif_400Regular',
+                      fontSize: 12,
+                      color: 'white',
+                    }}
+                  >
+                    {s.mono}
+                  </Text>
+                </View>
+                <Text
+                  style={{
+                    fontFamily: 'Geist_500Medium',
+                    fontSize: 12,
+                    color: t.text,
+                  }}
+                >
+                  {s.name}
                 </Text>
               </View>
-              <Text
-                style={{
-                  fontFamily: 'Geist_500Medium',
-                  fontSize: 12,
-                  color: t.text,
-                }}
-              >
-                {s.name}
-              </Text>
-            </View>
-          ))}
-        </View>
+            ))}
+          </View>
+        )}
       </Animated.View>
 
       <Animated.View
@@ -214,7 +320,7 @@ export function MatchOverlay({ movie, onClose, onOpenMatches }: Props) {
           Keep swiping
         </FlickButton>
         <FlickButton onPress={onOpenMatches} size="md" style={{ flex: 1.5 }}>
-          Watch now →
+          See matches →
         </FlickButton>
       </Animated.View>
     </Animated.View>

@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
   useAnimatedStyle,
@@ -23,6 +24,8 @@ export const SWIPE_CARD_H = 500;
 export function SwipeCard({ movie, dx, dy }: Props) {
   const t = useTheme();
   const services = FLICK_SERVICES.filter((s) => movie.services.includes(s.id));
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = !!movie.posterUrl && !imgFailed;
 
   const yesStyle = useAnimatedStyle(() => {
     if (!dx || !dy) return { opacity: 0 };
@@ -78,6 +81,15 @@ export function SwipeCard({ movie, dx, dy }: Props) {
         end={{ x: 1, y: 1 }}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       />
+      {showImage && (
+        <Image
+          source={{ uri: movie.posterUrl }}
+          style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+          contentFit="cover"
+          transition={200}
+          onError={() => setImgFailed(true)}
+        />
+      )}
       {/* top highlight */}
       <LinearGradient
         colors={['rgba(255,255,255,0.15)', 'transparent']}

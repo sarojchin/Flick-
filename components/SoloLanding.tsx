@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { useRouter } from 'expo-router';
 import { useTheme } from '@/lib/ThemeContext';
 import { withAlpha } from '@/lib/theme';
 import { useRoom } from '@/lib/RoomState';
-import { FLICK_MOVIES } from '@/lib/data';
+import { FLICK_MOVIES, type Movie } from '@/lib/data';
 import { FlickWordmark } from '@/components/FlickWordmark';
 import { FlickPoster } from '@/components/FlickPoster';
 
@@ -21,15 +21,32 @@ function greetingFor(hour: number): string {
 export function SoloLanding() {
   const t = useTheme();
   const router = useRouter();
-  const { profile, updateMode, resetRoom, regenerateRoom } = useRoom();
+  const { profile, updateMode, resetRoom, regenerateRoom, deck, deckLoading } = useRoom();
 
   const greet = greetingFor(new Date().getHours());
-  const picks = [FLICK_MOVIES[2], FLICK_MOVIES[6], FLICK_MOVIES[9]];
-  const rows = [
-    { label: 'Because you liked sharp dramas', movies: FLICK_MOVIES.slice(0, 5) },
-    { label: 'Short & sweet (under 100 min)', movies: FLICK_MOVIES.slice(3, 8) },
-    { label: 'Critically adored', movies: FLICK_MOVIES.slice(5, 10) },
-  ];
+
+  // Derive shelves from the live TMDB deck so every title shown is real.
+  // While the deck is still loading we fall back to decorative gradient-only
+  // posters from FLICK_MOVIES (no titles will look fake — they appear inside
+  // a loading skeleton row).
+  const realDeck = deck.length > 0;
+  const picks: Movie[] = useMemo(() => {
+    if (realDeck) return deck.slice(0, 3);
+    return [FLICK_MOVIES[2], FLICK_MOVIES[6], FLICK_MOVIES[9]];
+  }, [realDeck, deck]);
+
+  const rows: { label: string; movies: Movie[] }[] = useMemo(() => {
+    if (!realDeck) return [];
+    const byRating = [...deck].sort((a, b) => b.rating - a.rating);
+    const quick = deck.filter((m) => m.runtime > 0 && m.runtime <= 100);
+    return [
+      { label: "Tonight's stack", movies: deck.slice(0, 6) },
+      { label: 'Top picks', movies: byRating.slice(0, 6) },
+      ...(quick.length >= 3
+        ? [{ label: 'Short & sweet (under 100 min)', movies: quick.slice(0, 6) }]
+        : []),
+    ];
+  }, [realDeck, deck]);
 
   const onSwipe = () => {
     resetRoom();
@@ -286,6 +303,21 @@ export function SoloLanding() {
 
         {/* recommendation rows */}
         <View style={{ paddingTop: 24 }}>
+          {!realDeck && (
+            <View style={{ paddingHorizontal: 24, paddingBottom: 8 }}>
+              <Text
+                style={{
+                  fontFamily: 'JetBrainsMono_400Regular',
+                  fontSize: 10,
+                  color: t.textMute,
+                  letterSpacing: 1.5,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {deckLoading ? 'loading real titles…' : 'no titles yet — set a TMDB token in .env'}
+              </Text>
+            </View>
+          )}
           {rows.map((row, ri) => (
             <View key={ri} style={{ marginBottom: 22 }}>
               <View

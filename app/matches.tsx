@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
@@ -164,93 +164,201 @@ export default function MatchesList() {
 function MatchRow({ movie, isMaybe }: { movie: Movie; isMaybe: boolean }) {
   const t = useTheme();
   const services = FLICK_SERVICES.filter((s) => movie.services.includes(s.id));
+  const providers = movie.providers ?? [];
+  const [open, setOpen] = useState(false);
+
+  const openProvider = (deepLink: string | undefined, name: string) => {
+    const url = deepLink ?? `https://www.google.com/search?q=${encodeURIComponent(`watch ${movie.title} on ${name}`)}`;
+    Linking.openURL(url).catch(() => {});
+  };
+
   return (
     <View
       style={{
-        flexDirection: 'row',
-        gap: 14,
         padding: 12,
         backgroundColor: t.surface,
         borderWidth: 1,
         borderColor: t.border,
         borderRadius: 18,
-        alignItems: 'center',
       }}
     >
-      <View style={{ width: 72 }}>
-        <FlickPoster movie={movie} size="sm" />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text
-          style={{
-            fontFamily: 'InstrumentSerif_400Regular',
-            fontSize: 20,
-            color: t.text,
-            letterSpacing: -0.3,
-            lineHeight: 22,
-          }}
-          numberOfLines={2}
-        >
-          {movie.title}
-        </Text>
-        <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
-          <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
-            {movie.year}
-          </Text>
-          <Text style={{ fontSize: 12, color: t.textDim }}>·</Text>
-          <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
-            {movie.runtime}m
-          </Text>
-          <Text style={{ fontSize: 12, color: t.textDim }}>·</Text>
-          <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
-            {movie.genres[0]}
-          </Text>
+      <Pressable
+        onPress={() => providers.length > 0 && setOpen((v) => !v)}
+        style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}
+      >
+        <View style={{ width: 72 }}>
+          <FlickPoster movie={movie} size="sm" />
         </View>
-        <View style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}>
-          {services.map((s) => (
-            <View
-              key={s.id}
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 4,
-                backgroundColor: s.tint,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            style={{
+              fontFamily: 'InstrumentSerif_400Regular',
+              fontSize: 20,
+              color: t.text,
+              letterSpacing: -0.3,
+              lineHeight: 22,
+            }}
+            numberOfLines={2}
+          >
+            {movie.title}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+            {movie.year > 0 && (
+              <>
+                <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
+                  {movie.year}
+                </Text>
+                <Text style={{ fontSize: 12, color: t.textDim }}>·</Text>
+              </>
+            )}
+            {movie.runtime > 0 && (
+              <>
+                <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
+                  {movie.runtime}m
+                </Text>
+                {movie.genres[0] && <Text style={{ fontSize: 12, color: t.textDim }}>·</Text>}
+              </>
+            )}
+            {movie.genres[0] && (
+              <Text style={{ fontFamily: 'Geist_400Regular', fontSize: 12, color: t.textDim }}>
+                {movie.genres[0]}
+              </Text>
+            )}
+          </View>
+          <View style={{ flexDirection: 'row', gap: 4, marginTop: 8 }}>
+            {services.map((s) => (
+              <View
+                key={s.id}
                 style={{
-                  fontFamily: 'InstrumentSerif_400Regular',
-                  fontSize: 11,
-                  color: 'white',
+                  width: 18,
+                  height: 18,
+                  borderRadius: 4,
+                  backgroundColor: s.tint,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
               >
-                {s.mono}
-              </Text>
-            </View>
-          ))}
+                <Text
+                  style={{
+                    fontFamily: 'InstrumentSerif_400Regular',
+                    fontSize: 11,
+                    color: 'white',
+                  }}
+                >
+                  {s.mono}
+                </Text>
+              </View>
+            ))}
+          </View>
         </View>
-      </View>
-      <View
-        style={{
-          paddingHorizontal: 10,
-          paddingVertical: 6,
-          borderRadius: 8,
-          backgroundColor: t.surface2,
-        }}
-      >
-        <Text
+        <View
           style={{
-            fontFamily: 'JetBrainsMono_400Regular',
-            fontSize: 10,
-            color: isMaybe ? t.accent : t.primary,
-            letterSpacing: 1,
+            paddingHorizontal: 10,
+            paddingVertical: 6,
+            borderRadius: 8,
+            backgroundColor: t.surface2,
           }}
         >
-          {isMaybe ? '? saved' : `★ ${movie.rating}`}
-        </Text>
-      </View>
+          <Text
+            style={{
+              fontFamily: 'JetBrainsMono_400Regular',
+              fontSize: 10,
+              color: isMaybe ? t.accent : t.primary,
+              letterSpacing: 1,
+            }}
+          >
+            {isMaybe ? '? saved' : `★ ${movie.rating}`}
+          </Text>
+        </View>
+      </Pressable>
+
+      {open && providers.length > 0 && (
+        <View
+          style={{
+            marginTop: 12,
+            paddingTop: 12,
+            borderTopWidth: 1,
+            borderTopColor: t.border,
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: 'JetBrainsMono_400Regular',
+              fontSize: 10,
+              color: t.textMute,
+              letterSpacing: 1,
+              marginBottom: 8,
+            }}
+          >
+            OPEN ON
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {providers.map((p) => {
+              const internal = FLICK_SERVICES.find(
+                (s) => s.name.toLowerCase() === p.name.toLowerCase()
+              );
+              return (
+                <Pressable
+                  key={p.name}
+                  onPress={() => openProvider(p.deepLink, p.name)}
+                  style={({ pressed }) => ({
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingVertical: 6,
+                    paddingLeft: 6,
+                    paddingRight: 12,
+                    borderRadius: 999,
+                    backgroundColor: t.surface2,
+                    borderWidth: 1,
+                    borderColor: t.border,
+                    opacity: pressed ? 0.85 : 1,
+                  })}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      backgroundColor: internal?.tint ?? t.primary,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: 'InstrumentSerif_400Regular',
+                        fontSize: 12,
+                        color: 'white',
+                      }}
+                    >
+                      {internal?.mono ?? p.name[0]}
+                    </Text>
+                  </View>
+                  <Text
+                    style={{
+                      fontFamily: 'Geist_500Medium',
+                      fontSize: 12,
+                      color: t.text,
+                    }}
+                  >
+                    {p.name}
+                  </Text>
+                  <Text
+                    style={{
+                      fontFamily: 'JetBrainsMono_400Regular',
+                      fontSize: 11,
+                      color: t.textMute,
+                    }}
+                  >
+                    ↗
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
     </View>
   );
 }

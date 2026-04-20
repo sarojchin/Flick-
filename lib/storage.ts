@@ -9,6 +9,7 @@ const K = {
   mode: 'flick.mode',
   services: 'flick.services',
   theme: 'flick.theme',
+  region: 'flick.region',
 };
 
 export async function loadStoredProfile(): Promise<{
@@ -17,13 +18,15 @@ export async function loadStoredProfile(): Promise<{
   mode: Mode;
   services: string[];
   theme: ThemeKey | null;
+  region: string | null;
 }> {
-  const [onboarded, name, mode, services, theme] = await Promise.all([
+  const [onboarded, name, mode, services, theme, region] = await Promise.all([
     AsyncStorage.getItem(K.onboarded),
     AsyncStorage.getItem(K.name),
     AsyncStorage.getItem(K.mode),
     AsyncStorage.getItem(K.services),
     AsyncStorage.getItem(K.theme),
+    AsyncStorage.getItem(K.region),
   ]);
   let parsedServices: string[] = [];
   try {
@@ -38,6 +41,7 @@ export async function loadStoredProfile(): Promise<{
     mode: parsedMode,
     services: parsedServices,
     theme: (theme as ThemeKey | null) ?? null,
+    region: region && /^[A-Z]{2}$/.test(region) ? region : null,
   };
 }
 
@@ -64,6 +68,10 @@ export async function saveServices(services: string[]) {
 
 export async function saveTheme(theme: ThemeKey) {
   await AsyncStorage.setItem(K.theme, theme);
+}
+
+export async function saveRegion(region: string) {
+  await AsyncStorage.setItem(K.region, region);
 }
 
 export async function clearOnboarded() {

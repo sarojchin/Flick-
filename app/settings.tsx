@@ -15,7 +15,7 @@ export default function Settings() {
   const t = useTheme();
   const router = useRouter();
   const { themeKey, setThemeKey } = useThemeControls();
-  const { profile, updateMode, resetOnboarding } = useRoom();
+  const { profile, updateMode, updateRegion, resetOnboarding } = useRoom();
 
   const onReplayOnboarding = async () => {
     await resetOnboarding();
@@ -47,6 +47,50 @@ export default function Settings() {
         <Section title="PROFILE">
           <Row label="Name" value={profile.name || 'Not set'} />
           <Row label="Streaming" value={`${profile.services.length} selected`} />
+          <Row label="Region" value={profile.region} />
+        </Section>
+
+        <Section title="REGION">
+          <Text
+            style={{
+              fontFamily: 'Geist_400Regular',
+              fontSize: 12,
+              color: t.textDim,
+              marginBottom: 10,
+            }}
+          >
+            Streaming availability is country-specific. Pick where you watch.
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {(['US', 'GB', 'CA', 'AU', 'DE', 'FR', 'JP', 'IN'] as const).map((r) => {
+              const on = profile.region === r;
+              return (
+                <Pressable
+                  key={r}
+                  onPress={() => updateRegion(r)}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 14,
+                    borderRadius: 999,
+                    backgroundColor: on ? t.surface2 : 'transparent',
+                    borderWidth: 1,
+                    borderColor: on ? t.primary : t.border,
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: on ? 'Geist_600SemiBold' : 'Geist_400Regular',
+                      fontSize: 13,
+                      color: on ? t.text : t.textDim,
+                      letterSpacing: 1,
+                    }}
+                  >
+                    {r}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Section>
 
         <Section title="MODE">

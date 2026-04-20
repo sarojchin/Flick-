@@ -1,20 +1,31 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { FLICK_MOVIES, type Movie, type Mood } from './data';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import * as Localization from 'expo-localization';
+import { type Movie, type Mood } from './data';
 import {
   loadStoredProfile,
   saveName,
   saveMode,
   saveOnboarded,
   saveServices,
+  saveRegion,
   clearOnboarded,
   type Mode,
 } from './storage';
+import { discoverByMood, getMovieDetail, TmdbError } from './tmdb';
+import { fromDiscover, fromDetail, mergeDetail, tmdbIdOf } from './movieAdapter';
+import { readCache, writeCache, DECK_TTL_MS, DETAIL_TTL_MS } from './cache';
 
 interface Profile {
   name: string;
   mode: Mode;
   services: string[];
+  region: string;
 }
+
+const DEFAULT_REGION = 'US';
+const DEFAULT_MOOD: Mood = 'feelgood';
+const PREFETCH_AHEAD = 3;
+const DECK_PAGE_SIZE_TARGET = 20;
 
 interface RoomCtx {
   hydrated: boolean;
@@ -25,7 +36,8 @@ interface RoomCtx {
   updateName: (n: string) => void;
   updateMode: (m: Mode) => void;
   updateServices: (s: string[]) => void;
-  completeOnboarding: (p: Profile) => Promise<void>;
+  updateRegion: (r: string) => void;
+  completeOnboarding: (p: Omit<Profile, 'region'>) => Promise<void>;
   resetOnboarding: () => Promise<void>;
 
   // Per-room
@@ -49,6 +61,9 @@ interface RoomCtx {
   setMatchMovie: (m: Movie | null) => void;
 
   deck: Movie[];
+  deckLoading: boolean;
+  deckError: string | null;
+  reloadDeck: () => void;
   resetRoom: () => void;
 }
 
@@ -61,10 +76,34 @@ function generateRoomId(): string {
   return out;
 }
 
+function detectRegion(): string {
+  try {
+    const locales = Localization.getLocales?.();
+    const code = locales?.[0]?.regionCode;
+    return code && /^[A-Z]{2}$/.test(code) ? code : DEFAULT_REGION;
+  } catch {
+    return DEFAULT_REGION;
+  }
+}
+
+function deckCacheKey(mood: Mood, region: string, services: string[], page: number): string {
+  const svc = [...services].sort().join(',');
+  return `deck.${mood}.${region}.${svc}.p${page}`;
+}
+
+function detailCacheKey(tmdbId: number, region: string): string {
+  return `detail.${tmdbId}.${region}`;
+}
+
 export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
-  const [profile, setProfileState] = useState<Profile>({ name: '', mode: 'couple', services: [] });
+  const [profile, setProfileState] = useState<Profile>({
+    name: '',
+    mode: 'couple',
+    services: [],
+    region: DEFAULT_REGION,
+  });
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [roomServices, setRoomServices] = useState<string[]>([]);
@@ -76,11 +115,21 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   const [maybes, setMaybes] = useState<Movie[]>([]);
   const [matchMovie, setMatchMovie] = useState<Movie | null>(null);
 
+  const [deck, setDeck] = useState<Movie[]>([]);
+  const [deckLoading, setDeckLoading] = useState(false);
+  const [deckError, setDeckError] = useState<string | null>(null);
+  const fetchSeq = useRef(0);
+
   useEffect(() => {
     loadStoredProfile().then((p) => {
+      const region = p.region ?? detectRegion();
       setOnboarded(p.onboarded);
-      setProfileState({ name: p.name, mode: p.mode, services: p.services });
+      setProfileState({ name: p.name, mode: p.mode, services: p.services, region });
       setRoomServices(p.services);
+      if (!p.region) {
+        // Persist auto-detected region so subsequent launches are stable.
+        saveRegion(region).catch(() => {});
+      }
       setHydrated(true);
     });
   }, []);
@@ -90,6 +139,7 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     saveName(p.name).catch(() => {});
     saveMode(p.mode).catch(() => {});
     saveServices(p.services).catch(() => {});
+    saveRegion(p.region).catch(() => {});
   };
 
   const updateName = (n: string) => {
@@ -107,9 +157,14 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     saveServices(s).catch(() => {});
   };
 
-  const completeOnboarding = useCallback(async (p: Profile) => {
+  const updateRegion = (r: string) => {
+    setProfileState((prev) => ({ ...prev, region: r }));
+    saveRegion(r).catch(() => {});
+  };
+
+  const completeOnboarding = useCallback(async (p: Omit<Profile, 'region'>) => {
     await saveOnboarded(p.name, p.mode, p.services);
-    setProfileState(p);
+    setProfileState((prev) => ({ ...p, region: prev.region }));
     setRoomServices(p.services);
     setOnboarded(true);
   }, []);
@@ -133,6 +188,104 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     setMaybes((prev) => (prev.find((x) => x.id === m.id) ? prev : [m, ...prev]));
   }, []);
 
+  // ---------------- Deck loading ----------------
+
+  const loadDeck = useCallback(async (m: Mood, region: string, services: string[]) => {
+    const seq = ++fetchSeq.current;
+    setDeckLoading(true);
+    setDeckError(null);
+
+    // Try cache first.
+    const cacheKey = deckCacheKey(m, region, services, 1);
+    const cached = await readCache<Movie[]>(cacheKey, DECK_TTL_MS);
+    if (cached && cached.length && fetchSeq.current === seq) {
+      setDeck(cached);
+      setDeckIdx(0);
+      setDeckLoading(false);
+      // Continue to fetch fresh in background to refresh the cache.
+    }
+
+    try {
+      // Pull two pages so the deck has runway before pagination kicks in.
+      const [p1, p2] = await Promise.all([
+        discoverByMood(m, { region, serviceIds: services, page: 1 }),
+        discoverByMood(m, { region, serviceIds: services, page: 2 }).catch(() => null),
+      ]);
+      if (fetchSeq.current !== seq) return;
+
+      const pages = [p1, p2].filter((p): p is NonNullable<typeof p> => !!p);
+      const movies = pages
+        .flatMap((p) => p.results)
+        .filter((r) => r.poster_path) // skip posterless entries
+        .map((r) => fromDiscover(r, m))
+        .slice(0, DECK_PAGE_SIZE_TARGET * 2);
+
+      setDeck(movies);
+      setDeckIdx(0);
+      writeCache(cacheKey, movies).catch(() => {});
+    } catch (err) {
+      if (fetchSeq.current !== seq) return;
+      const msg = err instanceof TmdbError ? err.message : (err as Error)?.message ?? 'Failed to load films';
+      setDeckError(msg);
+      // Keep cached deck visible (if any) on error.
+    } finally {
+      if (fetchSeq.current === seq) setDeckLoading(false);
+    }
+  }, []);
+
+  // Reload when mood, region, or services change after hydration.
+  useEffect(() => {
+    if (!hydrated) return;
+    const m = mood ?? DEFAULT_MOOD;
+    loadDeck(m, profile.region, roomServices);
+  }, [hydrated, mood, profile.region, roomServices, loadDeck]);
+
+  const reloadDeck = useCallback(() => {
+    const m = mood ?? DEFAULT_MOOD;
+    loadDeck(m, profile.region, roomServices);
+  }, [mood, profile.region, roomServices, loadDeck]);
+
+  // ---------------- Detail prefetch ----------------
+
+  const enrichingIds = useRef<Set<number>>(new Set());
+
+  const enrichOne = useCallback(async (m: Movie) => {
+    const id = tmdbIdOf(m);
+    if (id == null) return;
+    if (enrichingIds.current.has(id)) return;
+    if (m.runtime > 0 && m.providers !== undefined) return; // already enriched
+    enrichingIds.current.add(id);
+    try {
+      const cacheKey = detailCacheKey(id, profile.region);
+      const cached = await readCache<Movie>(cacheKey, DETAIL_TTL_MS);
+      let detailMovie: Movie;
+      if (cached) {
+        detailMovie = cached;
+      } else {
+        const detail = await getMovieDetail(id);
+        detailMovie = fromDetail(detail, m.mood, profile.region);
+        writeCache(cacheKey, detailMovie).catch(() => {});
+      }
+      setDeck((prev) => prev.map((x) => (x.id === m.id ? mergeDetail(x, detailMovie) : x)));
+      // Also enrich any match/maybe references already captured.
+      setMatches((prev) => prev.map((x) => (x.id === m.id ? mergeDetail(x, detailMovie) : x)));
+      setMaybes((prev) => prev.map((x) => (x.id === m.id ? mergeDetail(x, detailMovie) : x)));
+    } catch {
+      // Silent — UI falls back to discover-level fields.
+    } finally {
+      enrichingIds.current.delete(id);
+    }
+  }, [profile.region]);
+
+  // Prefetch detail for the current card and a few ahead.
+  useEffect(() => {
+    if (!hydrated) return;
+    for (let i = 0; i < PREFETCH_AHEAD; i++) {
+      const m = deck[deckIdx + i];
+      if (m) enrichOne(m);
+    }
+  }, [deckIdx, deck, hydrated, enrichOne]);
+
   const resetRoom = useCallback(() => {
     setMood(null);
     setRoomServices(profile.services);
@@ -144,13 +297,6 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     setRoomId(generateRoomId());
   }, [profile.services]);
 
-  const deck = useMemo(() => {
-    if (!mood) return FLICK_MOVIES;
-    const matching = FLICK_MOVIES.filter((m) => m.mood === mood);
-    const others = FLICK_MOVIES.filter((m) => m.mood !== mood);
-    return [...matching, ...others];
-  }, [mood]);
-
   const value = useMemo<RoomCtx>(
     () => ({
       hydrated,
@@ -160,6 +306,7 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
       updateName,
       updateMode,
       updateServices,
+      updateRegion,
       completeOnboarding,
       resetOnboarding,
       mood,
@@ -179,12 +326,16 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
       matchMovie,
       setMatchMovie,
       deck,
+      deckLoading,
+      deckError,
+      reloadDeck,
       resetRoom,
     }),
     [
       hydrated, onboarded, profile, mood, roomServices, roomId, partnerJoined,
-      deckIdx, matches, maybes, matchMovie, deck,
-      completeOnboarding, resetOnboarding, regenerateRoom, addMatch, addMaybe, resetRoom,
+      deckIdx, matches, maybes, matchMovie, deck, deckLoading, deckError,
+      completeOnboarding, resetOnboarding, regenerateRoom, addMatch, addMaybe,
+      reloadDeck, resetRoom,
     ]
   );
 
