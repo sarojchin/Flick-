@@ -20,6 +20,7 @@ import { FlickWordmark } from '@/components/FlickWordmark';
 import { FlickStatusDot } from '@/components/FlickStatusDot';
 import { FlickButton } from '@/components/FlickButton';
 import { FlickPoster } from '@/components/FlickPoster';
+import { SoloLanding } from '@/components/SoloLanding';
 
 const HERO_POSTERS = [
   { movie: FLICK_MOVIES[1], x: -110, y: 20, rot: -12, z: 1, delay: 0 },
@@ -64,6 +65,10 @@ export default function Landing() {
   const t = useTheme();
   const router = useRouter();
   const { regenerateRoom, resetRoom, profile } = useRoom();
+
+  if (profile.mode === 'solo') {
+    return <SoloLanding />;
+  }
 
   const onStart = () => {
     resetRoom();

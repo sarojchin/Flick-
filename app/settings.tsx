@@ -15,7 +15,7 @@ export default function Settings() {
   const t = useTheme();
   const router = useRouter();
   const { themeKey, setThemeKey } = useThemeControls();
-  const { profile, resetOnboarding } = useRoom();
+  const { profile, updateMode, resetOnboarding } = useRoom();
 
   const onReplayOnboarding = async () => {
     await resetOnboarding();
@@ -47,6 +47,40 @@ export default function Settings() {
         <Section title="PROFILE">
           <Row label="Name" value={profile.name || 'Not set'} />
           <Row label="Streaming" value={`${profile.services.length} selected`} />
+        </Section>
+
+        <Section title="MODE">
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(['solo', 'couple'] as const).map((m) => {
+              const on = profile.mode === m;
+              const label = m === 'solo' ? 'For you' : 'With a partner';
+              return (
+                <Pressable
+                  key={m}
+                  onPress={() => updateMode(m)}
+                  style={{
+                    flex: 1,
+                    padding: 12,
+                    borderRadius: 12,
+                    backgroundColor: on ? t.surface2 : 'transparent',
+                    borderWidth: 1,
+                    borderColor: on ? t.primary : t.border,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontFamily: on ? 'Geist_600SemiBold' : 'Geist_400Regular',
+                      fontSize: 13,
+                      color: t.text,
+                    }}
+                  >
+                    {label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </Section>
 
         <Section title="COLOR THEME">

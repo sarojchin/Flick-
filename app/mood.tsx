@@ -13,12 +13,15 @@ import { FlickButton } from '@/components/FlickButton';
 export default function MoodScreen() {
   const t = useTheme();
   const router = useRouter();
-  const { mood, setMood } = useRoom();
+  const { mood, setMood, profile } = useRoom();
+
+  const isSolo = profile.mode === 'solo';
+  const onNext = () => router.push(isSolo ? '/swipe' : '/services');
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: t.bg }}>
       <View style={{ paddingTop: 8 }}>
-        <ScreenHeader onBack={() => router.back()} step="01 / 03" />
+        <ScreenHeader onBack={() => router.back()} step={isSolo ? '01 / 01' : '01 / 03'} />
       </View>
       <View style={{ paddingHorizontal: 24, paddingTop: 20 }}>
         <Text
@@ -123,12 +126,7 @@ export default function MoodScreen() {
       </View>
 
       <View style={{ paddingHorizontal: 24, paddingBottom: 24 }}>
-        <FlickButton
-          onPress={() => router.push('/services')}
-          disabled={!mood}
-          size="lg"
-          fullWidth
-        >
+        <FlickButton onPress={onNext} disabled={!mood} size="lg" fullWidth>
           Continue  →
         </FlickButton>
       </View>

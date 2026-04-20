@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,8 +20,15 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '@/lib/ThemeContext';
 import { withAlpha } from '@/lib/theme';
 import { useRoom } from '@/lib/RoomState';
-import { FLICK_MOODS, FLICK_MOVIES, FLICK_SERVICES, STORY_CONTENT, type Mood } from '@/lib/data';
-import { FlickWordmark } from '@/components/FlickWordmark';
+import {
+  FLICK_MOODS,
+  FLICK_MOVIES,
+  FLICK_SERVICES,
+  STORY_CONTENT,
+  STORY_CONTENT_SOLO,
+  type Mood,
+} from '@/lib/data';
+import type { Mode } from '@/lib/storage';
 import { FlickPoster } from '@/components/FlickPoster';
 import { FlickButton } from '@/components/FlickButton';
 import { FlickServiceChip } from '@/components/FlickServiceChip';
@@ -29,22 +36,24 @@ import { ProgressDots } from '@/components/ProgressDots';
 import { StoryIllustration } from '@/components/StoryIllustration';
 import { MiniPhone } from '@/components/MiniPhone';
 
-type StepKind = 'splash' | 'story' | 'name' | 'mood' | 'services' | 'pairing';
+type StepKind = 'splash' | 'name' | 'mode' | 'story' | 'mood' | 'services' | 'pairing';
 interface Step {
   id: string;
   kind: StepKind;
   storyIndex?: 0 | 1 | 2;
 }
 
-const STEPS: Step[] = [
+// Order follows the design handoff: splash → name → mode → 3 story cards
+// (copy flips per mode) → mood → services → pairing (couple only).
+const BASE_STEPS: Step[] = [
   { id: 'splash', kind: 'splash' },
+  { id: 'name',   kind: 'name' },
+  { id: 'mode',   kind: 'mode' },
   { id: 'how1',   kind: 'story', storyIndex: 0 },
   { id: 'how2',   kind: 'story', storyIndex: 1 },
   { id: 'how3',   kind: 'story', storyIndex: 2 },
-  { id: 'name',   kind: 'name' },
   { id: 'mood',   kind: 'mood' },
   { id: 'svcs',   kind: 'services' },
-  { id: 'pair',   kind: 'pairing' },
 ];
 
 export default function OnboardingScreen() {
@@ -55,21 +64,31 @@ export default function OnboardingScreen() {
   const [step, setStep] = useState(0);
   const [dir, setDir] = useState<1 | -1>(1);
   const [name, setName] = useState(profile.name || '');
+  const [mode, setMode] = useState<Mode | null>(profile.mode ?? null);
   const [services, setServices] = useState<string[]>(profile.services || []);
   const [moodDemo, setMoodDemo] = useState<Mood | null>(null);
 
-  const cur = STEPS[step];
-  const total = STEPS.length;
+  const steps = useMemo<Step[]>(
+    () => (mode === 'couple' ? [...BASE_STEPS, { id: 'pair', kind: 'pairing' }] : BASE_STEPS),
+    [mode]
+  );
+  const cur = steps[step];
+  const total = steps.length;
 
   const canNext = () => {
     if (cur.kind === 'name') return name.trim().length >= 1;
+    if (cur.kind === 'mode') return mode === 'solo' || mode === 'couple';
     if (cur.kind === 'services') return services.length > 0;
     return true;
   };
 
   const next = async () => {
     if (step === total - 1) {
-      await completeOnboarding({ name: name.trim(), services });
+      await completeOnboarding({
+        name: name.trim(),
+        mode: mode ?? 'couple',
+        services,
+      });
       router.replace('/landing');
       return;
     }
@@ -155,10 +174,11 @@ export default function OnboardingScreen() {
         style={{ flex: 1 }}
       >
         {cur.kind === 'splash' && <SplashStep />}
-        {cur.kind === 'story' && cur.storyIndex !== undefined && (
-          <StoryStep index={cur.storyIndex} />
-        )}
         {cur.kind === 'name' && <NameStep name={name} setName={setName} />}
+        {cur.kind === 'mode' && <ModeStep mode={mode} setMode={setMode} />}
+        {cur.kind === 'story' && cur.storyIndex !== undefined && (
+          <StoryStep index={cur.storyIndex} mode={mode ?? 'couple'} />
+        )}
         {cur.kind === 'mood' && <MoodPrimerStep mood={moodDemo} setMood={setMoodDemo} />}
         {cur.kind === 'services' && (
           <ServicesStep services={services} setServices={setServices} />
@@ -292,66 +312,7 @@ function SplashPoster({
   );
 }
 
-// ─── Story (steps 2-4) ───
-function StoryStep({ index }: { index: 0 | 1 | 2 }) {
-  const t = useTheme();
-  const c = STORY_CONTENT[index];
-  return (
-    <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 20 }}>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <StoryIllustration index={index} />
-      </View>
-      <View>
-        <Text
-          style={{
-            fontFamily: 'JetBrainsMono_400Regular',
-            fontSize: 11,
-            color: t.primary,
-            letterSpacing: 2,
-            textTransform: 'uppercase',
-          }}
-        >
-          {c.eyebrow}
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'InstrumentSerif_400Regular',
-            fontSize: 44,
-            lineHeight: 44,
-            color: t.text,
-            letterSpacing: -1,
-            marginTop: 10,
-          }}
-        >
-          {c.title}
-          {'\n'}
-          <Text
-            style={{
-              fontFamily: 'InstrumentSerif_400Regular_Italic',
-              color: t.primary,
-            }}
-          >
-            {c.titleItalic}
-          </Text>
-        </Text>
-        <Text
-          style={{
-            fontFamily: 'Geist_400Regular',
-            fontSize: 14,
-            color: t.textDim,
-            lineHeight: 21,
-            marginTop: 14,
-            maxWidth: 320,
-          }}
-        >
-          {c.body}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Name (step 5) ───
+// ─── Name (step 2) ───
 function NameStep({ name, setName }: { name: string; setName: (s: string) => void }) {
   const t = useTheme();
   return (
@@ -365,7 +326,7 @@ function NameStep({ name, setName }: { name: string; setName: (s: string) => voi
           textTransform: 'uppercase',
         }}
       >
-        04 · you
+        01 · you
       </Text>
       <Text
         style={{
@@ -397,7 +358,7 @@ function NameStep({ name, setName }: { name: string; setName: (s: string) => voi
           maxWidth: 300,
         }}
       >
-        So your partner knows whose room they're joining.
+        So your partner knows whose room they're joining — or just so Flick! can greet you.
       </Text>
 
       <View style={{ marginTop: 36 }}>
@@ -463,7 +424,7 @@ function NameStep({ name, setName }: { name: string; setName: (s: string) => voi
               style={{
                 fontFamily: 'InstrumentSerif_400Regular',
                 fontSize: 18,
-                color: 'white',
+                color: t.bg,
               }}
             >
               {name[0]?.toUpperCase()}
@@ -498,7 +459,230 @@ function NameStep({ name, setName }: { name: string; setName: (s: string) => voi
   );
 }
 
-// ─── Mood primer (step 6) ───
+// ─── Mode (step 3) ───
+function ModeStep({ mode, setMode }: { mode: Mode | null; setMode: (m: Mode) => void }) {
+  const t = useTheme();
+  const opts: {
+    id: Mode;
+    eyebrow: string;
+    title: string;
+    titleItalic: string;
+    body: string;
+    glyph: string;
+  }[] = [
+    {
+      id: 'solo',
+      eyebrow: 'just me',
+      title: 'For you,',
+      titleItalic: 'tonight.',
+      body: 'Personal picks based on your taste. You can always start a room with someone later.',
+      glyph: '◐',
+    },
+    {
+      id: 'couple',
+      eyebrow: 'together',
+      title: 'With a',
+      titleItalic: 'partner.',
+      body: "You'll set up a shared room. Either of you can kick it off, anywhere.",
+      glyph: '◉',
+    },
+  ];
+  return (
+    <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 30 }}>
+      <Text
+        style={{
+          fontFamily: 'JetBrainsMono_400Regular',
+          fontSize: 11,
+          color: t.primary,
+          letterSpacing: 2,
+          textTransform: 'uppercase',
+        }}
+      >
+        02 · who's watching
+      </Text>
+      <Text
+        style={{
+          fontFamily: 'InstrumentSerif_400Regular',
+          fontSize: 40,
+          lineHeight: 40,
+          color: t.text,
+          letterSpacing: -1,
+          marginTop: 10,
+        }}
+      >
+        How will you{' '}
+        <Text
+          style={{
+            fontFamily: 'InstrumentSerif_400Regular_Italic',
+            color: t.primary,
+          }}
+        >
+          use Flick!
+        </Text>
+        ?
+      </Text>
+      <Text
+        style={{
+          color: t.textDim,
+          fontSize: 14,
+          marginTop: 10,
+          fontFamily: 'Geist_400Regular',
+          maxWidth: 320,
+        }}
+      >
+        Pick one — you can switch any time.
+      </Text>
+
+      <View style={{ marginTop: 22, gap: 10, flex: 1 }}>
+        {opts.map((o) => {
+          const on = mode === o.id;
+          return (
+            <Pressable
+              key={o.id}
+              onPress={() => setMode(o.id)}
+              style={{
+                backgroundColor: on ? t.surface2 : t.surface,
+                borderWidth: 1,
+                borderColor: on ? t.primary : t.border,
+                borderRadius: 18,
+                padding: 18,
+                flexDirection: 'row',
+                gap: 14,
+                alignItems: 'flex-start',
+              }}
+            >
+              <View
+                style={{
+                  width: 42,
+                  height: 42,
+                  borderRadius: 12,
+                  backgroundColor: on ? t.primary : t.surface2,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: 'InstrumentSerif_400Regular',
+                    fontSize: 22,
+                    color: on ? t.bg : t.textDim,
+                  }}
+                >
+                  {o.glyph}
+                </Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={{
+                    fontFamily: 'JetBrainsMono_400Regular',
+                    fontSize: 10,
+                    color: on ? t.primary : t.textMute,
+                    letterSpacing: 1.5,
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {o.eyebrow}
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'InstrumentSerif_400Regular',
+                    fontSize: 26,
+                    lineHeight: 26,
+                    letterSpacing: -0.4,
+                    marginTop: 4,
+                    color: t.text,
+                  }}
+                >
+                  {o.title}{' '}
+                  <Text
+                    style={{
+                      fontFamily: 'InstrumentSerif_400Regular_Italic',
+                      color: on ? t.primary : t.text,
+                    }}
+                  >
+                    {o.titleItalic}
+                  </Text>
+                </Text>
+                <Text
+                  style={{
+                    fontFamily: 'Geist_400Regular',
+                    fontSize: 13,
+                    color: t.textDim,
+                    marginTop: 6,
+                    lineHeight: 19,
+                  }}
+                >
+                  {o.body}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ─── Story (steps 4-6) ───
+function StoryStep({ index, mode }: { index: 0 | 1 | 2; mode: Mode }) {
+  const t = useTheme();
+  const c = (mode === 'solo' ? STORY_CONTENT_SOLO : STORY_CONTENT)[index];
+  return (
+    <View style={{ flex: 1, paddingHorizontal: 24, paddingTop: 20 }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <StoryIllustration index={index} />
+      </View>
+      <View>
+        <Text
+          style={{
+            fontFamily: 'JetBrainsMono_400Regular',
+            fontSize: 11,
+            color: t.primary,
+            letterSpacing: 2,
+            textTransform: 'uppercase',
+          }}
+        >
+          {c.eyebrow}
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'InstrumentSerif_400Regular',
+            fontSize: 44,
+            lineHeight: 44,
+            color: t.text,
+            letterSpacing: -1,
+            marginTop: 10,
+          }}
+        >
+          {c.title}
+          {'\n'}
+          <Text
+            style={{
+              fontFamily: 'InstrumentSerif_400Regular_Italic',
+              color: t.primary,
+            }}
+          >
+            {c.titleItalic}
+          </Text>
+        </Text>
+        <Text
+          style={{
+            fontFamily: 'Geist_400Regular',
+            fontSize: 14,
+            color: t.textDim,
+            lineHeight: 21,
+            marginTop: 14,
+            maxWidth: 320,
+          }}
+        >
+          {c.body}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── Mood primer (step 7) ───
 function MoodPrimerStep({ mood, setMood }: { mood: Mood | null; setMood: (m: Mood | null) => void }) {
   const t = useTheme();
   const moods = FLICK_MOODS.slice(0, 4);
@@ -513,7 +697,7 @@ function MoodPrimerStep({ mood, setMood }: { mood: Mood | null; setMood: (m: Moo
           textTransform: 'uppercase',
         }}
       >
-        05 · moods
+        06 · moods
       </Text>
       <Text
         style={{
@@ -525,7 +709,7 @@ function MoodPrimerStep({ mood, setMood }: { mood: Mood | null; setMood: (m: Moo
           marginTop: 10,
         }}
       >
-        Every room has a{' '}
+        Every session has a{' '}
         <Text
           style={{
             fontFamily: 'InstrumentSerif_400Regular_Italic',
@@ -621,7 +805,7 @@ function MoodPrimerStep({ mood, setMood }: { mood: Mood | null; setMood: (m: Moo
   );
 }
 
-// ─── Services (step 7) ───
+// ─── Services (step 8) ───
 function ServicesStep({
   services,
   setServices,
@@ -643,7 +827,7 @@ function ServicesStep({
           textTransform: 'uppercase',
         }}
       >
-        06 · streaming
+        07 · streaming
       </Text>
       <Text
         style={{
@@ -716,7 +900,7 @@ function ServicesStep({
   );
 }
 
-// ─── Pairing preview (step 8) ───
+// ─── Pairing preview (step 9 — couple only) ───
 function PairingStep({ name }: { name: string }) {
   const t = useTheme();
   const dash = useSharedValue(0);
@@ -738,7 +922,7 @@ function PairingStep({ name }: { name: string }) {
           textTransform: 'uppercase',
         }}
       >
-        07 · together
+        08 · together
       </Text>
       <Text
         style={{
@@ -881,7 +1065,7 @@ function PairingStep({ name }: { name: string }) {
                 style={{
                   fontFamily: 'Geist_600SemiBold',
                   fontSize: 11,
-                  color: 'white',
+                  color: t.bg,
                 }}
               >
                 Tap to join →

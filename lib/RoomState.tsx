@@ -1,9 +1,18 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { FLICK_MOVIES, type Movie, type Mood } from './data';
-import { loadStoredProfile, saveName, saveOnboarded, saveServices, clearOnboarded } from './storage';
+import {
+  loadStoredProfile,
+  saveName,
+  saveMode,
+  saveOnboarded,
+  saveServices,
+  clearOnboarded,
+  type Mode,
+} from './storage';
 
 interface Profile {
   name: string;
+  mode: Mode;
   services: string[];
 }
 
@@ -14,6 +23,7 @@ interface RoomCtx {
   profile: Profile;
   setProfile: (p: Profile) => void;
   updateName: (n: string) => void;
+  updateMode: (m: Mode) => void;
   updateServices: (s: string[]) => void;
   completeOnboarding: (p: Profile) => Promise<void>;
   resetOnboarding: () => Promise<void>;
@@ -54,7 +64,7 @@ function generateRoomId(): string {
 export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [onboarded, setOnboarded] = useState(false);
-  const [profile, setProfileState] = useState<Profile>({ name: '', services: [] });
+  const [profile, setProfileState] = useState<Profile>({ name: '', mode: 'couple', services: [] });
 
   const [mood, setMood] = useState<Mood | null>(null);
   const [roomServices, setRoomServices] = useState<string[]>([]);
@@ -69,7 +79,7 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     loadStoredProfile().then((p) => {
       setOnboarded(p.onboarded);
-      setProfileState({ name: p.name, services: p.services });
+      setProfileState({ name: p.name, mode: p.mode, services: p.services });
       setRoomServices(p.services);
       setHydrated(true);
     });
@@ -78,6 +88,7 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   const setProfile = (p: Profile) => {
     setProfileState(p);
     saveName(p.name).catch(() => {});
+    saveMode(p.mode).catch(() => {});
     saveServices(p.services).catch(() => {});
   };
 
@@ -86,13 +97,18 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     saveName(n).catch(() => {});
   };
 
+  const updateMode = (m: Mode) => {
+    setProfileState((prev) => ({ ...prev, mode: m }));
+    saveMode(m).catch(() => {});
+  };
+
   const updateServices = (s: string[]) => {
     setProfileState((prev) => ({ ...prev, services: s }));
     saveServices(s).catch(() => {});
   };
 
   const completeOnboarding = useCallback(async (p: Profile) => {
-    await saveOnboarded(p.name, p.services);
+    await saveOnboarded(p.name, p.mode, p.services);
     setProfileState(p);
     setRoomServices(p.services);
     setOnboarded(true);
@@ -142,6 +158,7 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
       profile,
       setProfile,
       updateName,
+      updateMode,
       updateServices,
       completeOnboarding,
       resetOnboarding,
