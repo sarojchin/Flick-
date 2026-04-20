@@ -166,7 +166,7 @@ export default function SwipeScreen() {
             borderColor: t.border,
             alignItems: 'center',
             justifyContent: 'center',
-            transform: pressed ? [{ scale: 0.93 }] : undefined,
+            ...(pressed && { transform: [{ scale: 0.93 }] }),
           })}
         >
           <Svg width="12" height="12" viewBox="0 0 12 12">
@@ -206,7 +206,7 @@ export default function SwipeScreen() {
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
-            transform: pressed ? [{ scale: 0.95 }] : undefined,
+            ...(pressed && { transform: [{ scale: 0.95 }] }),
           })}
         >
           <Text style={{ color: t.primary, fontFamily: 'Geist_600SemiBold' }}>♡</Text>
