@@ -32,7 +32,7 @@ export function ActionButton({ icon, color, onPress, big, small }: Props) {
         shadowOpacity: 0.35,
         shadowRadius: 12,
         elevation: 6,
-        transform: pressed ? [{ scale: 0.92 }] : undefined,
+        ...(pressed && { transform: [{ scale: 0.92 }] }),
       })}
     >
       <Text style={{ color, fontSize: fs, lineHeight: fs + 4, fontWeight: '500' }}>

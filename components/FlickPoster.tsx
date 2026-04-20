@@ -28,7 +28,7 @@ export function FlickPoster({ movie, size = 'md', tilt = 0 }: Props) {
         height: H,
         borderRadius: radius,
         overflow: 'hidden',
-        transform: tilt ? [{ rotate: `${tilt}deg` }] : undefined,
+        ...(tilt && { transform: [{ rotate: `${tilt}deg` }] }),
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 20 },
         shadowOpacity: size === 'sm' ? 0 : 0.5,

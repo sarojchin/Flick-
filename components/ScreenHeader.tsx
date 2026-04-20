@@ -31,7 +31,7 @@ export function ScreenHeader({ onBack, step, right }: Props) {
           borderColor: t.border,
           alignItems: 'center',
           justifyContent: 'center',
-          transform: pressed ? [{ scale: 0.93 }] : undefined,
+          ...(pressed && { transform: [{ scale: 0.93 }] }),
         })}
       >
         <Svg width="14" height="14" viewBox="0 0 14 14">
