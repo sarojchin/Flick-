@@ -63,7 +63,7 @@ export function FlickButton({
           {
             borderRadius: 14,
             width: fullWidth ? '100%' : undefined,
-            transform: pressed ? [{ scale: 0.97 }] : undefined,
+            ...(pressed && { transform: [{ scale: 0.97 }] }),
             opacity: disabled ? 0.4 : 1,
             shadowColor: t.primary,
             shadowOffset: { width: 0, height: 8 },
@@ -96,7 +96,7 @@ export function FlickButton({
             backgroundColor: 'transparent',
             borderWidth: 1,
             borderColor: t.border,
-            transform: pressed ? [{ scale: 0.97 }] : undefined,
+            ...(pressed && { transform: [{ scale: 0.97 }] }),
           },
           style,
         ]}
@@ -115,7 +115,7 @@ export function FlickButton({
           backgroundColor: t.surface,
           borderWidth: 1,
           borderColor: t.border,
-          transform: pressed ? [{ scale: 0.97 }] : undefined,
+          ...(pressed && { transform: [{ scale: 0.97 }] }),
         },
         style,
       ]}
