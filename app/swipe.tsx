@@ -276,7 +276,6 @@ export default function SwipeScreen() {
       >
         {afterNext && (
           <View
-            key={afterNext.id}
             style={{
               position: 'absolute',
               transform: [{ scale: 0.92 }, { translateY: 24 }],
@@ -289,7 +288,6 @@ export default function SwipeScreen() {
         )}
         {next && (
           <Animated.View
-            key={next.id}
             style={[
               { position: 'absolute' },
               nextCardStyle,
@@ -300,7 +298,7 @@ export default function SwipeScreen() {
           </Animated.View>
         )}
         <GestureDetector gesture={pan}>
-          <Animated.View key={current.id} style={[{ position: 'absolute' }, cardStyle]}>
+          <Animated.View style={[{ position: 'absolute' }, cardStyle]}>
             <SwipeCard movie={current} dx={dx} dy={dy} />
           </Animated.View>
         </GestureDetector>
