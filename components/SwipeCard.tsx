@@ -25,7 +25,7 @@ interface Props {
 export const SWIPE_CARD_W = 340;
 export const SWIPE_CARD_H = 500;
 
-const PANEL_HEIGHT = 300;
+const PANEL_HEIGHT = SWIPE_CARD_H;
 
 function renderStars(rating: number) {
   // rating is 0..100; map to 0..5 in 0.5 steps
@@ -154,54 +154,6 @@ export function SwipeCard({ movie, dx, dy, detailsOpen = false }: Props) {
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       />
 
-      {/* Top: code + info button */}
-      <View
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: 18,
-          right: 18,
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-        }}
-      >
-        <Text
-          style={{
-            fontFamily: 'JetBrainsMono_400Regular',
-            fontSize: 10,
-            color: 'rgba(255,255,255,0.75)',
-            letterSpacing: 1,
-          }}
-        >
-          {movie.code}
-        </Text>
-        <View
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 15,
-            backgroundColor: 'rgba(0,0,0,0.45)',
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.25)',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <Text
-            style={{
-              fontFamily: 'InstrumentSerif_400Regular_Italic',
-              fontSize: 18,
-              color: 'white',
-              lineHeight: 20,
-              marginTop: -1,
-            }}
-          >
-            {detailsOpen ? '×' : 'i'}
-          </Text>
-        </View>
-      </View>
-
       {/* Poster-view compact title strip */}
       <Animated.View
         style={[
@@ -268,34 +220,22 @@ export function SwipeCard({ movie, dx, dy, detailsOpen = false }: Props) {
             right: 0,
             bottom: 0,
             height: PANEL_HEIGHT,
-            backgroundColor: 'rgba(8,10,14,0.86)',
-            borderTopWidth: 1,
-            borderTopColor: 'rgba(255,255,255,0.12)',
-            paddingHorizontal: 20,
-            paddingTop: 10,
-            paddingBottom: 18,
+            backgroundColor: 'rgba(8,10,14,0.92)',
+            paddingHorizontal: 22,
+            paddingTop: 60,
+            paddingBottom: 22,
           },
           panelStyle,
         ]}
         pointerEvents={detailsOpen ? 'auto' : 'none'}
       >
-        <View
-          style={{
-            alignSelf: 'center',
-            width: 36,
-            height: 4,
-            borderRadius: 2,
-            backgroundColor: 'rgba(255,255,255,0.25)',
-            marginBottom: 12,
-          }}
-        />
         <Text
           style={{
             fontFamily: 'InstrumentSerif_400Regular',
-            fontSize: 30,
-            lineHeight: 32,
+            fontSize: 38,
+            lineHeight: 40,
             color: 'white',
-            letterSpacing: -0.6,
+            letterSpacing: -0.8,
           }}
           numberOfLines={2}
         >
@@ -369,12 +309,11 @@ export function SwipeCard({ movie, dx, dy, detailsOpen = false }: Props) {
         <Text
           style={{
             fontFamily: 'Geist_400Regular',
-            fontSize: 13,
+            fontSize: 14,
             color: 'rgba(255,255,255,0.92)',
-            lineHeight: 18,
-            marginTop: 12,
+            lineHeight: 20,
+            marginTop: 14,
           }}
-          numberOfLines={6}
         >
           {movie.synopsis}
         </Text>
@@ -453,6 +392,56 @@ export function SwipeCard({ movie, dx, dy, detailsOpen = false }: Props) {
           </View>
         )}
       </Animated.View>
+
+      {/* Top: code + info indicator — rendered after the panel so it stays
+          visible when details are open */}
+      <View
+        style={{
+          position: 'absolute',
+          top: 16,
+          left: 18,
+          right: 18,
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+        }}
+        pointerEvents="none"
+      >
+        <Text
+          style={{
+            fontFamily: 'JetBrainsMono_400Regular',
+            fontSize: 10,
+            color: 'rgba(255,255,255,0.75)',
+            letterSpacing: 1,
+          }}
+        >
+          {movie.code}
+        </Text>
+        <View
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 15,
+            backgroundColor: 'rgba(0,0,0,0.45)',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.25)',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <Text
+            style={{
+              fontFamily: 'InstrumentSerif_400Regular_Italic',
+              fontSize: 18,
+              color: 'white',
+              lineHeight: 20,
+              marginTop: -1,
+            }}
+          >
+            {detailsOpen ? '×' : 'i'}
+          </Text>
+        </View>
+      </View>
 
       {/* YES / NO / MAYBE stamps (unchanged) */}
       <Animated.View
