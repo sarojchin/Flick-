@@ -53,6 +53,17 @@ export default function SwipeScreen() {
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
 
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const toggleDetails = () => setDetailsOpen((v) => !v);
+
+  // Reset & schedule auto-reveal each time a new card comes to the front
+  useEffect(() => {
+    if (!current) return;
+    setDetailsOpen(false);
+    const id = setTimeout(() => setDetailsOpen(true), 2800);
+    return () => clearTimeout(id);
+  }, [current?.id]);
+
   const [partnerHint, setPartnerHint] = useState<{ verdict: 'yes' | 'no'; movie: Movie } | null>(null);
 
   // Partner ghost-swipe simulation
@@ -119,6 +130,14 @@ export default function SwipeScreen() {
         dy.value = withSpring(0);
       }
     });
+
+  const tap = Gesture.Tap()
+    .maxDuration(250)
+    .onStart(() => {
+      runOnJS(toggleDetails)();
+    });
+
+  const cardGesture = Gesture.Exclusive(tap, pan);
 
   const cardStyle = useAnimatedStyle(() => {
     const verticalLead = dy.value < 0 && Math.abs(dy.value) > Math.abs(dx.value);
@@ -299,9 +318,9 @@ export default function SwipeScreen() {
             <SwipeCard movie={next} />
           </Animated.View>
         )}
-        <GestureDetector gesture={pan}>
+        <GestureDetector gesture={cardGesture}>
           <Animated.View key={current.id} style={[{ position: 'absolute' }, cardStyle]}>
-            <SwipeCard movie={current} dx={dx} dy={dy} />
+            <SwipeCard movie={current} dx={dx} dy={dy} detailsOpen={detailsOpen} />
           </Animated.View>
         </GestureDetector>
       </View>
