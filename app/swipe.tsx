@@ -133,11 +133,12 @@ export default function SwipeScreen() {
 
   const tap = Gesture.Tap()
     .maxDuration(250)
+    .maxDistance(8)
     .onStart(() => {
       runOnJS(toggleDetails)();
     });
 
-  const cardGesture = Gesture.Exclusive(tap, pan);
+  const cardGesture = Gesture.Simultaneous(pan, tap);
 
   const cardStyle = useAnimatedStyle(() => {
     const verticalLead = dy.value < 0 && Math.abs(dy.value) > Math.abs(dx.value);
