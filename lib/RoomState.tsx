@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import * as Localization from 'expo-localization';
+import { Image } from 'expo-image';
 import { type Movie, type Mood } from './data';
 import {
   loadStoredProfile,
@@ -24,7 +25,7 @@ interface Profile {
 
 const DEFAULT_REGION = 'US';
 const DEFAULT_MOOD: Mood = 'feelgood';
-const PREFETCH_AHEAD = 3;
+const PREFETCH_AHEAD = 6;
 const DECK_PAGE_SIZE_TARGET = 20;
 
 interface RoomCtx {
@@ -223,6 +224,11 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
       setDeck(movies);
       setDeckIdx(0);
       writeCache(cacheKey, movies).catch(() => {});
+      // Eagerly prefetch the first batch of posters so the swipe screen
+      // opens with images already in cache.
+      movies.slice(0, PREFETCH_AHEAD).forEach((mv) => {
+        if (mv.posterUrl) Image.prefetch(mv.posterUrl).catch(() => {});
+      });
     } catch (err) {
       if (fetchSeq.current !== seq) return;
       const msg = err instanceof TmdbError ? err.message : (err as Error)?.message ?? 'Failed to load films';
@@ -277,12 +283,19 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
     }
   }, [profile.region]);
 
-  // Prefetch detail for the current card and a few ahead.
+  // Prefetch images and detail for the current card + cards ahead.
   useEffect(() => {
     if (!hydrated) return;
     for (let i = 0; i < PREFETCH_AHEAD; i++) {
       const m = deck[deckIdx + i];
-      if (m) enrichOne(m);
+      if (!m) continue;
+      // Fire image prefetch immediately — this is the primary source of
+      // between-card lag. expo-image caches to disk so second view is instant.
+      if (m.posterUrl) {
+        Image.prefetch(m.posterUrl).catch(() => {});
+      }
+      // Detail enrichment is lower priority; kick it off in parallel.
+      enrichOne(m);
     }
   }, [deckIdx, deck, hydrated, enrichOne]);
 
