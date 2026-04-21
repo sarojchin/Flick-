@@ -53,6 +53,14 @@ export default function SwipeScreen() {
   const dx = useSharedValue(0);
   const dy = useSharedValue(0);
 
+  // A snapshot of the card that is currently flying off-screen. It renders
+  // as a separate overlay driven by its own shared values so that `dx`/`dy`
+  // can reset to 0 the instant the deck advances — the new foreground card
+  // therefore never gets painted at the outgoing translation.
+  const [outgoing, setOutgoing] = useState<Movie | null>(null);
+  const exitX = useSharedValue(0);
+  const exitY = useSharedValue(0);
+
   const [detailsOpen, setDetailsOpen] = useState(false);
   const toggleDetails = () => setDetailsOpen((v) => !v);
 
@@ -79,14 +87,11 @@ export default function SwipeScreen() {
     return () => clearInterval(id);
   }, [deckIdx, deck]);
 
-  const advance = () => {
-    setDeckIdx((i) => i + 1);
-    dx.value = 0;
-    dy.value = 0;
-  };
+  const clearOutgoing = () => setOutgoing(null);
 
   const commit = (verdict: Verdict) => {
     if (!current) return;
+
     if (verdict === 'yes') {
       const willMatch = Math.random() < 0.35 || deckIdx === 2;
       if (willMatch) {
@@ -96,19 +101,32 @@ export default function SwipeScreen() {
     if (verdict === 'maybe') {
       addMaybe(current);
     }
+
+    // Hand the current card off to the outgoing overlay, starting at the
+    // user's release position. Reset the live drag values and advance the
+    // deck in the same synchronous block so the next card slots in at 0,0.
+    const startX = dx.value;
+    const startY = dy.value;
+    exitX.value = startX;
+    exitY.value = startY;
+    setOutgoing(current);
+    dx.value = 0;
+    dy.value = 0;
+    setDeckIdx((i) => i + 1);
+
     if (verdict === 'yes') {
-      dx.value = withTiming(500, { duration: 260, easing: Easing.out(Easing.quad) }, () => {
-        runOnJS(advance)();
+      exitX.value = withTiming(500, { duration: 260, easing: Easing.out(Easing.quad) }, (finished) => {
+        if (finished) runOnJS(clearOutgoing)();
       });
-      dy.value = withTiming(-60, { duration: 260 });
+      exitY.value = withTiming(-60, { duration: 260 });
     } else if (verdict === 'no') {
-      dx.value = withTiming(-500, { duration: 260, easing: Easing.out(Easing.quad) }, () => {
-        runOnJS(advance)();
+      exitX.value = withTiming(-500, { duration: 260, easing: Easing.out(Easing.quad) }, (finished) => {
+        if (finished) runOnJS(clearOutgoing)();
       });
-      dy.value = withTiming(-60, { duration: 260 });
+      exitY.value = withTiming(-60, { duration: 260 });
     } else {
-      dy.value = withTiming(-700, { duration: 280, easing: Easing.out(Easing.quad) }, () => {
-        runOnJS(advance)();
+      exitY.value = withTiming(-700, { duration: 280, easing: Easing.out(Easing.quad) }, (finished) => {
+        if (finished) runOnJS(clearOutgoing)();
       });
     }
   };
@@ -147,6 +165,18 @@ export default function SwipeScreen() {
       transform: [
         { translateX: dx.value },
         { translateY: verticalLead ? dy.value : dy.value * 0.3 },
+        { rotate: `${rot}deg` },
+      ],
+    };
+  });
+
+  const outgoingStyle = useAnimatedStyle(() => {
+    const verticalLead = exitY.value < 0 && Math.abs(exitY.value) > Math.abs(exitX.value);
+    const rot = verticalLead ? 0 : exitX.value / 18;
+    return {
+      transform: [
+        { translateX: exitX.value },
+        { translateY: verticalLead ? exitY.value : exitY.value * 0.3 },
         { rotate: `${rot}deg` },
       ],
     };
@@ -324,6 +354,15 @@ export default function SwipeScreen() {
             <SwipeCard movie={current} dx={dx} dy={dy} detailsOpen={detailsOpen} />
           </Animated.View>
         </GestureDetector>
+        {outgoing && (
+          <Animated.View
+            key={`out-${outgoing.id}`}
+            style={[{ position: 'absolute' }, outgoingStyle]}
+            pointerEvents="none"
+          >
+            <SwipeCard movie={outgoing} />
+          </Animated.View>
+        )}
       </View>
 
       <Text
