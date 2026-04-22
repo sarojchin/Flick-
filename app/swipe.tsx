@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
+import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -19,7 +20,7 @@ import Svg, { Path } from 'react-native-svg';
 import { useTheme } from '@/lib/ThemeContext';
 import { useRoom } from '@/lib/RoomState';
 import { type Movie } from '@/lib/data';
-import { SwipeCard } from '@/components/SwipeCard';
+import { SwipeCard, SWIPE_CARD_H, SWIPE_CARD_W } from '@/components/SwipeCard';
 import { ActionButton } from '@/components/ActionButton';
 import { FlickStatusDot } from '@/components/FlickStatusDot';
 import { FlickPoster } from '@/components/FlickPoster';
@@ -304,6 +305,8 @@ export default function SwipeScreen() {
         </GestureDetector>
       </View>
 
+      <PosterWarmingPool deck={deck} deckIdx={deckIdx} />
+
       <Text
         style={{
           textAlign: 'center',
@@ -499,5 +502,52 @@ function EmptyStack({ onExit }: { onExit: () => void }) {
         </FlickButton>
       </View>
     </SafeAreaView>
+  );
+}
+
+// Hidden Image instances for the next ~6 movies, mounted at the full swipe-
+// card size off-screen. A mounted Image at the display size keeps the decoded
+// bitmap on the GPU (Image.prefetch only caches the encoded bytes), so when
+// a slot's URI swaps to one of these URLs the swap is genuinely instant.
+const POOL_AHEAD = 6;
+const PoolItem = React.memo(function PoolItem({ uri }: { uri: string }) {
+  return (
+    <Image
+      source={{ uri }}
+      style={{ width: SWIPE_CARD_W, height: SWIPE_CARD_H }}
+      contentFit="cover"
+      transition={0}
+      cachePolicy="memory-disk"
+      priority="low"
+      recyclingKey={uri}
+    />
+  );
+});
+
+function PosterWarmingPool({ deck, deckIdx }: { deck: Movie[]; deckIdx: number }) {
+  const urls = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 0; i < POOL_AHEAD; i++) {
+      const m = deck[deckIdx + i];
+      if (m?.posterUrl) out.push(m.posterUrl);
+    }
+    return out;
+  }, [deck, deckIdx]);
+  return (
+    <View
+      style={{
+        position: 'absolute',
+        width: SWIPE_CARD_W,
+        height: SWIPE_CARD_H,
+        opacity: 0,
+        top: -SWIPE_CARD_H * 2,
+        left: -SWIPE_CARD_W * 2,
+      }}
+      pointerEvents="none"
+    >
+      {urls.map((uri) => (
+        <PoolItem key={uri} uri={uri} />
+      ))}
+    </View>
   );
 }

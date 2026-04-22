@@ -215,6 +215,8 @@ function SwipeCardImpl({ movie, dx, dy }: Props) {
       {/* Synopsis + services */}
       <View style={{ position: 'absolute', bottom: 18, left: 20, right: 20 }}>
         <Text
+          numberOfLines={3}
+          ellipsizeMode="tail"
           style={{
             fontFamily: 'Geist_400Regular',
             fontSize: 13,
