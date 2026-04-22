@@ -224,11 +224,14 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
       setDeck(movies);
       setDeckIdx(0);
       writeCache(cacheKey, movies).catch(() => {});
-      // Eagerly prefetch the first batch of posters so the swipe screen
-      // opens with images already in cache.
-      movies.slice(0, PREFETCH_AHEAD).forEach((mv) => {
-        if (mv.posterUrl) Image.prefetch(mv.posterUrl).catch(() => {});
-      });
+      // Eagerly prefetch the first batch of posters into the memory cache so
+      // the swipe screen opens with bitmaps already decoded — `disk` alone
+      // means each first view still pays a decode cost.
+      const urls = movies
+        .slice(0, PREFETCH_AHEAD)
+        .map((mv) => mv.posterUrl)
+        .filter((u): u is string => !!u);
+      if (urls.length) Image.prefetch(urls, 'memory-disk').catch(() => {});
     } catch (err) {
       if (fetchSeq.current !== seq) return;
       const msg = err instanceof TmdbError ? err.message : (err as Error)?.message ?? 'Failed to load films';
@@ -284,19 +287,14 @@ export function RoomStateProvider({ children }: { children: React.ReactNode }) {
   }, [profile.region]);
 
   // Prefetch images and detail for the current card + cards ahead.
+  // Batch the URL list and push everything to the memory cache in one call
+  // so subsequent renders pull a decoded bitmap instead of re-reading disk.
   useEffect(() => {
     if (!hydrated) return;
-    for (let i = 0; i < PREFETCH_AHEAD; i++) {
-      const m = deck[deckIdx + i];
-      if (!m) continue;
-      // Fire image prefetch immediately — this is the primary source of
-      // between-card lag. expo-image caches to disk so second view is instant.
-      if (m.posterUrl) {
-        Image.prefetch(m.posterUrl).catch(() => {});
-      }
-      // Detail enrichment is lower priority; kick it off in parallel.
-      enrichOne(m);
-    }
+    const slice = deck.slice(deckIdx, deckIdx + PREFETCH_AHEAD);
+    const urls = slice.map((m) => m.posterUrl).filter((u): u is string => !!u);
+    if (urls.length) Image.prefetch(urls, 'memory-disk').catch(() => {});
+    slice.forEach((m) => enrichOne(m));
   }, [deckIdx, deck, hydrated, enrichOne]);
 
   const resetRoom = useCallback(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,11 +21,19 @@ interface Props {
 export const SWIPE_CARD_W = 340;
 export const SWIPE_CARD_H = 500;
 
-export function SwipeCard({ movie, dx, dy }: Props) {
+function SwipeCardImpl({ movie, dx, dy }: Props) {
   const t = useTheme();
-  const services = FLICK_SERVICES.filter((s) => movie.services.includes(s.id));
+  const services = useMemo(
+    () => FLICK_SERVICES.filter((s) => movie.services.includes(s.id)),
+    [movie.services]
+  );
   const [imgFailed, setImgFailed] = useState(false);
   const showImage = !!movie.posterUrl && !imgFailed;
+  // Stable source so expo-image doesn't reload when parent re-renders.
+  const imageSource = useMemo(
+    () => (movie.posterUrl ? { uri: movie.posterUrl } : null),
+    [movie.posterUrl]
+  );
 
   useEffect(() => {
     setImgFailed(false);
@@ -85,13 +93,14 @@ export function SwipeCard({ movie, dx, dy }: Props) {
         end={{ x: 1, y: 1 }}
         style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
       />
-      {showImage && (
+      {showImage && imageSource && (
         <Image
-          source={{ uri: movie.posterUrl }}
+          source={imageSource}
           style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
           contentFit="cover"
           transition={0}
           cachePolicy="memory-disk"
+          priority="high"
           recyclingKey={movie.id}
           onError={() => setImgFailed(true)}
         />
@@ -349,3 +358,14 @@ export function SwipeCard({ movie, dx, dy }: Props) {
     </View>
   );
 }
+
+// Memoize so parent re-renders (partner-hint state, ghost-swipe interval,
+// background detail enrichment) don't re-render the visible cards. Only
+// the slot whose `movie` actually changed re-renders.
+export const SwipeCard = memo(SwipeCardImpl, (prev, next) => {
+  return (
+    prev.movie === next.movie &&
+    prev.dx === next.dx &&
+    prev.dy === next.dy
+  );
+});
